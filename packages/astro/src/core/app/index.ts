@@ -39,6 +39,12 @@ const STATUS_CODES = new Set([404, 500]);
 export interface MatchOptions {
 	matchNotFound?: boolean | undefined;
 }
+
+export interface RenderOptions {
+	routeData?: RouteData;
+	locals?: object;
+}
+
 export interface RenderErrorOptions {
 	routeData?: RouteData;
 	response?: Response;
@@ -145,7 +151,23 @@ export class App {
 		return routeData;
 	}
 
-	async render(request: Request, routeData?: RouteData, locals?: object): Promise<Response> {
+	async render(request: Request, options?: RenderOptions): Promise<Response>
+	async render(request: Request, routeData?: RouteData, locals?: object): Promise<Response>
+	async render(request: Request, routeDataOrOptions?: RouteData | RenderOptions, locals?: object): Promise<Response> {
+		let routeData: RouteData | undefined;
+		
+		if (routeDataOrOptions && ('routeData' in routeDataOrOptions || 'locals' in routeDataOrOptions)) {
+			if ('routeData' in routeDataOrOptions) {
+				routeData = routeDataOrOptions.routeData;
+			}
+			if ('locals' in routeDataOrOptions) {
+				locals = routeDataOrOptions.locals;
+			}
+		}
+		else {
+			routeData = routeDataOrOptions as RouteData;
+		}
+
 		// Handle requests with duplicate slashes gracefully by cloning with a cleaned-up request URL
 		if (request.url !== collapseDuplicateSlashes(request.url)) {
 			request = new Request(collapseDuplicateSlashes(request.url), request);
@@ -156,7 +178,6 @@ export class App {
 		if (!routeData) {
 			return this.#renderError(request, { status: 404 });
 		}
-
 		Reflect.set(request, clientLocalsSymbol, locals ?? {});
 		const pathname = this.#getPathnameFromRequest(request);
 		const defaultStatus = this.#getDefaultStatusCode(routeData, pathname);
