@@ -17,9 +17,7 @@ const WS_EVENT_NAME = 'astro-dev-overlay';
 
 export class AstroDevOverlay extends HTMLElement {
 	shadowRoot: ShadowRoot;
-	hoverTimeout: number | undefined;
-	isHidden: () => boolean = () => this.devOverlay?.hasAttribute('data-hidden') ?? true;
-	isActive: () => boolean = () => this.devOverlay?.hasAttribute('data-active-plugin') ?? false;
+	delayedHideTimeout: number | undefined;
 	devOverlay: HTMLDivElement | undefined;
 	plugins: DevOverlayPlugin[] = [];
 	HOVER_DELAY = 2 * 1000;
@@ -226,7 +224,7 @@ export class AstroDevOverlay extends HTMLElement {
 						this.plugins.filter((plugin) => !plugin.builtIn).length > this.customPluginsToShow
 							? this.getPluginTemplate(
 									this.plugins.find((plugin) => plugin.builtIn && plugin.id === 'astro:more')!
-								)
+							  )
 							: ''
 					}
 					<div class="separator"></div>
@@ -250,7 +248,7 @@ export class AstroDevOverlay extends HTMLElement {
 				this.shadowRoot?.append(pluginCanvas);
 			}
 
-			await this.togglePluginStatus(plugin, plugin.active);
+			await this.setPluginStatus(plugin, plugin.active);
 		});
 
 		// Init plugin lazily - This is safe to do here because only plugins that are not initialized yet will be affected
@@ -274,92 +272,73 @@ export class AstroDevOverlay extends HTMLElement {
 			item.addEventListener('click', async (e) => {
 				const target = e.currentTarget;
 				if (!target || !(target instanceof HTMLElement)) return;
-
 				const id = target.dataset.pluginId;
 				if (!id) return;
-
 				const plugin = this.getPluginById(id);
 				if (!plugin) return;
-
-				if (plugin.status === 'loading') {
-					await this.initPlugin(plugin);
-				}
-
-				if (this.isActive()) {
-					const currentPluginId = this.devOverlay?.getAttribute('data-active-plugin')!;
-					if (currentPluginId !== plugin.id) {
-						const currentPlugin = this.getPluginById(currentPluginId)!;
-						await this.togglePluginStatus(currentPlugin);
-					}
-				}
-
 				await this.togglePluginStatus(plugin);
 			});
 		});
-
 
 		const devBar = this.shadowRoot.querySelector<HTMLDivElement>('#dev-bar');
 		if (devBar) {
 			(['mouseenter', 'focusin'] as const).forEach((event) => {
 				devBar.addEventListener(event, () => {
-					if (this.hoverTimeout) {
-						window.clearTimeout(this.hoverTimeout);
-					}
-
+					this.clearDelayedHide();
 					if (this.isHidden()) {
-						this.toggleOverlay(true);
+						this.setOverlayVisible(true);
 					}
 				});
 			});
 
-			devBar.addEventListener('mouseleave', () => {
-				if (this.hoverTimeout) {
-					window.clearTimeout(this.hoverTimeout);
-				}
-				if (this.isActive() || this.isHidden()) {
-					return;
-				}
-				this.hoverTimeout = window.setTimeout(() => {
-					this.toggleOverlay(false);
-				}, this.HOVER_DELAY);
+			(['mouseleave', 'focusout'] as const).forEach((event) => {
+				devBar.addEventListener(event, () => {
+					this.clearDelayedHide();
+					if (this.getActivePlugin() || this.isHidden()) {
+						return;
+					}
+					this.triggerDelayedHide();
+				});
 			});
 
 			// On click, show the overlay if it's hidden, it's likely the user wants to interact with it
 			this.shadowRoot.addEventListener('click', () => {
 				if (!this.isHidden()) return;
-				this.toggleOverlay(true);
+				this.setOverlayVisible(true);
 			});
 
 			devBar.addEventListener('keyup', (event) => {
 				if (event.code === 'Space' || event.code === 'Enter') {
 					if (!this.isHidden()) return;
-					this.toggleOverlay(true);
+					this.setOverlayVisible(true);
 				}
 				if (event.key === 'Escape') {
 					if (this.isHidden()) return;
-					if (this.isActive()) return;
-					this.toggleOverlay(false);
+					if (this.getActivePlugin()) return;
+					this.setOverlayVisible(false);
 				}
 			});
 
 			document.addEventListener('keyup', (event) => {
-				if (event.key == 'Escape') {
-					if (this.isHidden()) return;
-					if (this.isActive()) {
-						const id = this.devOverlay?.getAttribute('data-active-plugin')!;
-						const plugin = this.getPluginById(id)!;
-						this.togglePluginStatus(plugin);
-					} else {
-						this.toggleOverlay(false);
-					}
+				if (event.key !== 'Escape') {
+					return;
 				}
+				if (this.isHidden()) {
+					return;
+				}
+				const activePlugin = this.getActivePlugin();
+				if (activePlugin) {
+					this.setPluginStatus(activePlugin, false);
+					return;
+				}
+				this.setOverlayVisible(false);
 			});
 
 			document.addEventListener('click', (event) => {
 				if (this.isHidden()) return;
-				if (this.isActive()) return;
+				if (this.getActivePlugin()) return;
 				if (this.shadowRoot.contains(event.target as Node)) return;
-				this.toggleOverlay(false);
+				this.setOverlayVisible(false);
 			});
 		}
 	}
@@ -417,11 +396,23 @@ export class AstroDevOverlay extends HTMLElement {
 		);
 	}
 
-	/**
-	 * @param plugin The plugin to toggle the status of
-	 * @param newStatus Optionally, force the plugin into a specific state
-	 */
-	async togglePluginStatus(plugin: DevOverlayPlugin, newStatus?: boolean) {
+	async togglePluginStatus(plugin: DevOverlayPlugin) {
+		const activePlugin = this.getActivePlugin();
+		if (activePlugin) {
+			await this.setPluginStatus(activePlugin, false);
+		}
+		// TODO(fks): Handle a plugin that hasn't loaded yet.
+		// Currently, this will just do nothing.
+		if (plugin.status !== 'ready') return;
+		// Open the selected plugin. If the selected plugin was
+		// already the active plugin then the desired outcome
+		// was to close that plugin, so no action needed.
+		if (plugin !== activePlugin) {
+			await this.setPluginStatus(plugin, true);
+		}
+	}
+
+	async setPluginStatus(plugin: DevOverlayPlugin, newStatus: boolean) {
 		const pluginCanvas = this.getPluginCanvasById(plugin.id);
 		if (!pluginCanvas) return;
 
@@ -446,60 +437,58 @@ export class AstroDevOverlay extends HTMLElement {
 			moreBarButton.classList.toggle('active', plugin.active);
 		}
 
-		window.clearTimeout(this.hoverTimeout);
 		if (plugin.active) {
 			pluginCanvas.style.display = 'block';
-			this.devOverlay?.setAttribute('data-active-plugin', plugin.id);
+			pluginCanvas.setAttribute('data-active', '');
 		} else {
 			pluginCanvas.style.display = 'none';
-			this.devOverlay?.removeAttribute('data-active-plugin');
-			if (!this.isHidden()) {
-				this.hoverTimeout = window.setTimeout(() => {
-					this.toggleOverlay(false);
-				}, this.HOVER_DELAY);
-			}
+			pluginCanvas.removeAttribute('data-active');
 		}
 
-		window.requestAnimationFrame(() => {
-			pluginCanvas.toggleAttribute('data-active', plugin.active);
-			plugin.eventTarget.dispatchEvent(
-				new CustomEvent('plugin-toggled', {
-					detail: {
-						state: plugin.active,
-						plugin,
-					},
-				})
-			);
-		});
+		plugin.eventTarget.dispatchEvent(
+			new CustomEvent('plugin-toggled', {
+				detail: {
+					state: plugin.active,
+					plugin,
+				},
+			})
+		);
 
 		if (import.meta.hot) {
 			import.meta.hot.send(`${WS_EVENT_NAME}:${plugin.id}:toggled`, { state: plugin.active });
 		}
 	}
-
-
-	toggleOverlay(newStatus?: boolean) {
+	isHidden(): boolean {
+		return this.devOverlay?.hasAttribute('data-hidden') ?? true;
+	}
+	getActivePlugin(): DevOverlayPlugin | undefined {
+		return this.plugins.find((plugin) => plugin.active);
+	}
+	clearDelayedHide() {
+		window.clearTimeout(this.delayedHideTimeout);
+		this.delayedHideTimeout = undefined;
+	}
+	triggerDelayedHide() {
+		this.clearDelayedHide();
+		this.delayedHideTimeout = window.setTimeout(() => {
+			this.setOverlayVisible(false);
+			this.delayedHideTimeout = undefined;
+		}, this.HOVER_DELAY);
+	}
+	setOverlayVisible(newStatus: boolean) {
 		const barContainer = this.shadowRoot.querySelector<HTMLDivElement>('#bar-container');
 		const devBar = this.shadowRoot.querySelector<HTMLDivElement>('#dev-bar');
-
-		if (newStatus !== undefined) {
-			if (newStatus === true) {
-				this.devOverlay?.removeAttribute('data-hidden');
-				barContainer?.removeAttribute('inert');
-				devBar?.removeAttribute('tabindex');
-			} else {
-				this.devOverlay?.setAttribute('data-hidden', '');
-				barContainer?.setAttribute('inert', '');
-				devBar?.setAttribute('tabindex', '0');
-			}
-		} else {
-			this.devOverlay?.toggleAttribute('data-hidden');
-			barContainer?.toggleAttribute('inert');
-			if (this.isHidden()) {
-				devBar?.setAttribute('tabindex', '0');
-			} else {
-				devBar?.removeAttribute('tabindex');
-			}
+		if (newStatus === true) {
+			this.devOverlay?.removeAttribute('data-hidden');
+			barContainer?.removeAttribute('inert');
+			devBar?.removeAttribute('tabindex');
+			return;
+		}
+		if (newStatus === false) {
+			this.devOverlay?.setAttribute('data-hidden', '');
+			barContainer?.setAttribute('inert', '');
+			devBar?.setAttribute('tabindex', '0');
+			return;
 		}
 	}
 }

@@ -155,7 +155,6 @@ export default {
 					margin-right: calc(var(--offset) * -1);
 					padding-left: var(--offset);
 					padding-right: var(--offset);
-					padding-bottom: 1em;
 					height: 210px;
 				}
 

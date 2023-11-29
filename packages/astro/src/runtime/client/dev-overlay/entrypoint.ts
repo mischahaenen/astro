@@ -88,7 +88,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 				newState = evt.detail.state ?? true;
 			}
 
-			await overlay.togglePluginStatus(plugin, newState);
+			await overlay.setPluginStatus(plugin, newState);
 		});
 
 		return plugin;
@@ -202,7 +202,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 					dropdown.append(buttonContainer);
 
-					eventTarget.addEventListener('plugin-toggled', positionDropdown);
+					eventTarget.addEventListener('plugin-toggled', () => {
+						// Use "requestAnimationFrame" to delay dropdown positioning
+						// until after the plugin is rendered.
+						window.requestAnimationFrame(() => positionDropdown());
+					});
 					window.addEventListener('resize', positionDropdown);
 
 					plugin.eventTarget.addEventListener('toggle-notification', (evt) => {
