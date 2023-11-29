@@ -28,7 +28,7 @@ let integrationData: IntegrationData;
 
 export default {
 	id: 'astro',
-	name: 'Astro',
+	name: 'Menu',
 	icon: 'astro:logo',
 	async init(canvas, eventTarget) {
 		createWindow();
@@ -330,7 +330,7 @@ export default {
 
 			<div id="main-container">
 				<div>
-					<header><h2>Top integrations</h2><a href="https://astro.build/integrations/" target="_blank">View all</a></header>
+					<header><h2>Featured integrations</h2><a href="https://astro.build/integrations/" target="_blank">View all</a></header>
 						<div id="integration-list-wrapper">
 							<section id="integration-list">
 								<div class="integration-skeleton" style="--i:0;"></div>

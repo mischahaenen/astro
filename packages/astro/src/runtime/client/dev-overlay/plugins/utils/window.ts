@@ -4,7 +4,7 @@ export function createWindowWithTransition(windowContent: string, addedNodes: No
 				<style>
 					:host {
 						opacity: 0;
-						transition: opacity 0.15s ease-in-out;
+						transition: opacity 0.2s ease-in-out;
 					}
 
 					:host([data-active]) {
@@ -13,13 +13,13 @@ export function createWindowWithTransition(windowContent: string, addedNodes: No
 
 					@media screen and (prefers-reduced-motion: no-preference) {
 						:host astro-dev-overlay-window {
-							transform: translateY(55px) translate(-50%, -50%);
-							transition: transform 0.15s ease-in-out;
+							transform: translateY(6px) translateX(-50%);
+							transition: transform 0.2s ease-out;
 							transform-origin: center bottom;
 						}
 
 						:host([data-active]) astro-dev-overlay-window {
-							transform: translateY(0) translate(-50%, -50%);
+							transform: translateY(0) translateX(-50%);
 						}
 					}
 				</style>

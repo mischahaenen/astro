@@ -37,7 +37,7 @@ const settingsRows = [
 
 export default {
 	id: 'astro:settings',
-	name: 'Overlay settings',
+	name: 'Settings',
 	icon: 'gear',
 	init(canvas) {
 		createSettingsWindow();
@@ -47,6 +47,9 @@ export default {
 		function createSettingsWindow() {
 			const window = createWindowWithTransition(
 				`<style>
+					:host {
+						min-height: 480px;
+					}
 					header {
 						display: flex;
 					}

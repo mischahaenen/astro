@@ -19,9 +19,10 @@ export class AstroDevOverlay extends HTMLElement {
 	shadowRoot: ShadowRoot;
 	hoverTimeout: number | undefined;
 	isHidden: () => boolean = () => this.devOverlay?.hasAttribute('data-hidden') ?? true;
+	isActive: () => boolean = () => this.devOverlay?.hasAttribute('data-active-plugin') ?? false;
 	devOverlay: HTMLDivElement | undefined;
 	plugins: DevOverlayPlugin[] = [];
-	HOVER_DELAY = 750;
+	HOVER_DELAY = 2 * 1000;
 	hasBeenInitialized = false;
 	customPluginsToShow = 3;
 
@@ -51,8 +52,8 @@ export class AstroDevOverlay extends HTMLElement {
 
 			#dev-overlay {
 				position: fixed;
-				bottom: 7.5%;
-				left: calc(50% + 32px);
+				bottom: 16px;
+				left: 50%;
 				transform: translate(-50%, 0%);
 				z-index: 9999999999;
 				display: flex;
@@ -63,20 +64,23 @@ export class AstroDevOverlay extends HTMLElement {
 			}
 
 			#dev-overlay[data-hidden] {
-				bottom: -40px;
+				bottom: -28px;
 			}
 
-			#dev-overlay[data-hidden]:hover, #dev-overlay[data-hidden]:focus-within {
-				bottom: -35px;
-				cursor: pointer;
+			#dev-overlay[data-hidden] #dev-bar .item {
+				opacity: 0;
 			}
-
-			#dev-overlay[data-hidden] #minimize-button {
-				visibility: hidden;
+			
+			#dev-bar-hitbox {
+				height: 42px;
+				width: 100%;
+				position: absolute;
+				top: -40px;
+				left: 0;
+				pointer-events: auto;
 			}
-
 			#dev-bar {
-				height: 56px;
+				height: 40px;
 				overflow: hidden;
 				pointer-events: auto;
 				background: linear-gradient(180deg, #13151A 0%, rgba(19, 21, 26, 0.88) 100%);
@@ -89,7 +93,7 @@ export class AstroDevOverlay extends HTMLElement {
 				display: flex;
 				justify-content: center;
 				align-items: center;
-				width: 64px;
+				width: 42px;
 				border: 0;
 				background: transparent;
 				color: white;
@@ -101,10 +105,11 @@ export class AstroDevOverlay extends HTMLElement {
 				padding: 0;
 				margin: 0;
 				overflow: hidden;
+				transition: opacity 0.2s ease-out 0s;
 			}
 
 			#dev-bar #bar-container .item:hover, #dev-bar #bar-container .item:focus-visible {
-				background: rgba(27, 30, 36, 1);
+				background: #FFFFFF20;
 				cursor: pointer;
 				outline-offset: -3px;
 			}
@@ -112,11 +117,15 @@ export class AstroDevOverlay extends HTMLElement {
 			#dev-bar .item:first-of-type {
 				border-top-left-radius: 9999px;
 				border-bottom-left-radius: 9999px;
+				width: 40px;
+				padding-left: 4px;
 			}
 
 			#dev-bar .item:last-of-type {
 				border-top-right-radius: 9999px;
 				border-bottom-right-radius: 9999px;
+				width: 40px;
+				padding-right: 4px;
 			}
 			#dev-bar #bar-container .item.active {
 				background: rgba(71, 78, 94, 1);
@@ -128,7 +137,7 @@ export class AstroDevOverlay extends HTMLElement {
 				border-radius: 4px;
 				padding: 4px 8px;
 				position: absolute;
-				top: -40px;
+				top: -36px;
 				opacity: 0;
 				transition: opacity 0.2s ease-in-out 0s;
 				pointer-events: none;
@@ -155,14 +164,14 @@ export class AstroDevOverlay extends HTMLElement {
 
 			#dev-bar .item .icon {
 				position: relative;
-				max-width: 24px;
-				max-height: 24px;
+				max-width: 18px;
+				max-height: 18px;
 				user-select: none;
 			}
 
 			#dev-bar .item svg {
-				width: 24px;
-				height: 24px;
+				width: 18px;
+				height: 18px;
 				display: block;
 				margin: auto;
 			}
@@ -192,54 +201,11 @@ export class AstroDevOverlay extends HTMLElement {
 				background: rgba(52, 56, 65, 1);
 				width: 1px;
 			}
-
-			#minimize-button {
-				width: 32px;
-				height: 32px;
-				background: rgba(255, 255, 255, 0.75);
-				border-radius: 9999px;
-				display: flex;
-				justify-content: center;
-				align-items: center;
-				opacity: 0;
-				transition: opacity 0.2s ease-in-out;
-				pointer-events: auto;
-				border: 0;
-				color: #13151A;
-				font-family: system-ui, sans-serif;
-				font-size: 1rem;
-				line-height: 1.2;
-				white-space: nowrap;
-				text-decoration: none;
-				padding: 0;
-				margin: 0;
-			}
-
-			#minimize-button:hover, #minimize-button:focus {
-				cursor: pointer;
-				background: rgba(255, 255, 255, 0.90);
-			}
-
-			#minimize-button svg {
-				width: 16px;
-				height: 16px;
-			}
-
-			.sr-only {
-				position: absolute;
-				width: 1px;
-				height: 1px;
-				padding: 0;
-				margin: -1px;
-				overflow: hidden;
-				clip: rect(0, 0, 0, 0);
-				white-space: nowrap;
-				border-width: 0;
-			}
 		</style>
 
-		<div id="dev-overlay">
+		<div id="dev-overlay" data-hidden>
 			<div id="dev-bar">
+				<div id="dev-bar-hitbox"></div>
 				<div id="bar-container">
 					${this.plugins
 						.filter(
@@ -260,7 +226,7 @@ export class AstroDevOverlay extends HTMLElement {
 						this.plugins.filter((plugin) => !plugin.builtIn).length > this.customPluginsToShow
 							? this.getPluginTemplate(
 									this.plugins.find((plugin) => plugin.builtIn && plugin.id === 'astro:more')!
-							  )
+								)
 							: ''
 					}
 					<div class="separator"></div>
@@ -269,7 +235,6 @@ export class AstroDevOverlay extends HTMLElement {
 					)}
 				</div>
 			</div>
-			<button id="minimize-button">${getIconElement('arrow-down')?.outerHTML}</button>
 		</div>`;
 			this.devOverlay = this.shadowRoot.querySelector<HTMLDivElement>('#dev-overlay')!;
 			this.attachEvents();
@@ -320,23 +285,21 @@ export class AstroDevOverlay extends HTMLElement {
 					await this.initPlugin(plugin);
 				}
 
+				if (this.isActive()) {
+					const currentPluginId = this.devOverlay?.getAttribute('data-active-plugin')!;
+					if (currentPluginId !== plugin.id) {
+						const currentPlugin = this.getPluginById(currentPluginId)!;
+						await this.togglePluginStatus(currentPlugin);
+					}
+				}
+
 				await this.togglePluginStatus(plugin);
 			});
 		});
 
-		const minimizeButton = this.shadowRoot.querySelector<HTMLDivElement>('#minimize-button');
-		if (minimizeButton && this.devOverlay) {
-			minimizeButton.addEventListener('click', () => {
-				this.toggleOverlay(false);
-				this.toggleMinimizeButton(false);
-			});
-		}
 
 		const devBar = this.shadowRoot.querySelector<HTMLDivElement>('#dev-bar');
 		if (devBar) {
-			// On hover:
-			// - If the overlay is hidden, show it after the hover delay
-			// - If the overlay is visible, show the minimize button after the hover delay
 			(['mouseenter', 'focusin'] as const).forEach((event) => {
 				devBar.addEventListener(event, () => {
 					if (this.hoverTimeout) {
@@ -344,34 +307,25 @@ export class AstroDevOverlay extends HTMLElement {
 					}
 
 					if (this.isHidden()) {
-						this.hoverTimeout = window.setTimeout(() => {
-							this.toggleOverlay(true);
-						}, this.HOVER_DELAY + 200); // Slightly higher delay here to prevent users opening the overlay by accident
-					} else {
-						this.hoverTimeout = window.setTimeout(() => {
-							this.toggleMinimizeButton(true);
-						}, this.HOVER_DELAY);
+						this.toggleOverlay(true);
 					}
 				});
 			});
 
-			// On unhover:
-			// - Reset every timeout, as to avoid showing the overlay/minimize button when the user didn't really want to hover
-			// - If the overlay is visible, hide the minimize button after the hover delay
 			devBar.addEventListener('mouseleave', () => {
 				if (this.hoverTimeout) {
 					window.clearTimeout(this.hoverTimeout);
 				}
-
-				if (!this.isHidden()) {
-					this.hoverTimeout = window.setTimeout(() => {
-						this.toggleMinimizeButton(false);
-					}, this.HOVER_DELAY);
+				if (this.isActive() || this.isHidden()) {
+					return;
 				}
+				this.hoverTimeout = window.setTimeout(() => {
+					this.toggleOverlay(false);
+				}, this.HOVER_DELAY);
 			});
 
 			// On click, show the overlay if it's hidden, it's likely the user wants to interact with it
-			devBar.addEventListener('click', () => {
+			this.shadowRoot.addEventListener('click', () => {
 				if (!this.isHidden()) return;
 				this.toggleOverlay(true);
 			});
@@ -381,6 +335,31 @@ export class AstroDevOverlay extends HTMLElement {
 					if (!this.isHidden()) return;
 					this.toggleOverlay(true);
 				}
+				if (event.key === 'Escape') {
+					if (this.isHidden()) return;
+					if (this.isActive()) return;
+					this.toggleOverlay(false);
+				}
+			});
+
+			document.addEventListener('keyup', (event) => {
+				if (event.key == 'Escape') {
+					if (this.isHidden()) return;
+					if (this.isActive()) {
+						const id = this.devOverlay?.getAttribute('data-active-plugin')!;
+						const plugin = this.getPluginById(id)!;
+						this.togglePluginStatus(plugin);
+					} else {
+						this.toggleOverlay(false);
+					}
+				}
+			});
+
+			document.addEventListener('click', (event) => {
+				if (this.isHidden()) return;
+				if (this.isActive()) return;
+				if (this.shadowRoot.contains(event.target as Node)) return;
+				this.toggleOverlay(false);
 			});
 		}
 	}
@@ -467,7 +446,19 @@ export class AstroDevOverlay extends HTMLElement {
 			moreBarButton.classList.toggle('active', plugin.active);
 		}
 
-		pluginCanvas.style.display = plugin.active ? 'block' : 'none';
+		window.clearTimeout(this.hoverTimeout);
+		if (plugin.active) {
+			pluginCanvas.style.display = 'block';
+			this.devOverlay?.setAttribute('data-active-plugin', plugin.id);
+		} else {
+			pluginCanvas.style.display = 'none';
+			this.devOverlay?.removeAttribute('data-active-plugin');
+			if (!this.isHidden()) {
+				this.hoverTimeout = window.setTimeout(() => {
+					this.toggleOverlay(false);
+				}, this.HOVER_DELAY);
+			}
+		}
 
 		window.requestAnimationFrame(() => {
 			pluginCanvas.toggleAttribute('data-active', plugin.active);
@@ -486,26 +477,6 @@ export class AstroDevOverlay extends HTMLElement {
 		}
 	}
 
-	/**
-	 * @param newStatus Optionally, force the minimize button into a specific state
-	 */
-	toggleMinimizeButton(newStatus?: boolean) {
-		const minimizeButton = this.shadowRoot.querySelector<HTMLDivElement>('#minimize-button');
-		if (!minimizeButton) return;
-
-		if (newStatus !== undefined) {
-			if (newStatus === true) {
-				minimizeButton.removeAttribute('inert');
-				minimizeButton.style.opacity = '1';
-			} else {
-				minimizeButton.setAttribute('inert', '');
-				minimizeButton.style.opacity = '0';
-			}
-		} else {
-			minimizeButton.toggleAttribute('inert');
-			minimizeButton.style.opacity = minimizeButton.hasAttribute('inert') ? '0' : '1';
-		}
-	}
 
 	toggleOverlay(newStatus?: boolean) {
 		const barContainer = this.shadowRoot.querySelector<HTMLDivElement>('#bar-container');
