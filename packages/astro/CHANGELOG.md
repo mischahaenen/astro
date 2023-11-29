@@ -1,5 +1,11 @@
 # astro
 
+## 4.0.0-beta.2
+
+### Major Changes
+
+- [#9212](https://github.com/withastro/astro/pull/9212) [`c0383ea0c`](https://github.com/withastro/astro/commit/c0383ea0c102cb62b7235823c706a090ba08715f) Thanks [@alexanderniebuhr](https://github.com/alexanderniebuhr)! - Removes deprecated `app.match()` option, `matchNotFound`
+
 ## 4.0.0-beta.1
 
 ### Patch Changes
